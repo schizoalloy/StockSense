@@ -1,0 +1,126 @@
+{
+  "name": "API — Run Supplier Contact",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "stocksense/run-supplier-contact",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -480,
+        -112
+      ],
+      "id": "128f4d54-bc7f-422c-aff4-8485f4dc8dd7",
+      "name": "Webhook",
+      "webhookId": "f5b4abc1-e43c-467b-bc50-7a8c4d964635"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        192,
+        -112
+      ],
+      "id": "48198cfd-1968-49f1-aeb6-ca2f55d2a561",
+      "name": "Respond to Webhook"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "SrRtDm2v2650JfRg",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/SrRtDm2v2650JfRg",
+          "cachedResultName": "StockSense — WF-2 Supplier Contact"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        -32,
+        -112
+      ],
+      "id": "0e39e367-116b-4437-b1ea-450c84e5d2a8",
+      "name": "Call 'StockSense — WF-2 Supplier Contact'"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body || {};\nreturn [{\n  json: {\n    runAt: body.runAt || new Date().toISOString(),\n    runId: Math.floor(Math.random() * 100000).toString(),\n    sheetId: '1cHZt75v-q95s9JxVbUFbhoRlM9_MVv1vCtXSNahPO34',\n    simulationEmail: 'muhammadali63251@gmail.com',\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -256,
+        -112
+      ],
+      "id": "7904f133-5675-4772-9217-7b6bd9d94025",
+      "name": "Code in JavaScript"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call 'StockSense — WF-2 Supplier Contact'": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Call 'StockSense — WF-2 Supplier Contact'",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "ff5b8095-82c0-4cc1-8890-3b6d4d0fc3f2",
+  "meta": {
+    "instanceId": "57d65a2bc812a61d6e5035e221165cd6b22c93ae42073164873dfc8f426d09d8"
+  },
+  "id": "J0yIcMGArjKfBYU0",
+  "tags": []
+}

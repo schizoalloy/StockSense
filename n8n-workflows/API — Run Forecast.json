@@ -1,0 +1,125 @@
+{
+  "name": "API — Run Forecast",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "stocksense/run-forecast",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -544,
+        -112
+      ],
+      "id": "d9ce239d-ee28-4d16-af44-b11770c3c290",
+      "name": "Webhook",
+      "webhookId": "2560999f-0e35-4aee-88c7-0dd2ec752651"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "Sz5G9tyAJZ4bMX11",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/Sz5G9tyAJZ4bMX11",
+          "cachedResultName": "StockSense — WF-1 Demand Forecasting BATCHED"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        -80,
+        -112
+      ],
+      "id": "0b60fa20-5588-4448-a456-3f42072209ae",
+      "name": "Call 'StockSense — WF-1 Demand Forecasting BATCHED'"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        128,
+        -112
+      ],
+      "id": "ea3bab0d-6de7-4805-b613-e00661609811",
+      "name": "Respond to Webhook"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body || {};\nreturn [{\n  json: {\n    runAt: body.runAt || new Date().toISOString(),\n    runId: Math.floor(Math.random() * 100000).toString(),\n    sheetId: '1cHZt75v-q95s9JxVbUFbhoRlM9_MVv1vCtXSNahPO34',\n    simulationEmail: 'muhammadali63251@gmail.com',\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -304,
+        -112
+      ],
+      "id": "ccfdfd62-8c54-40f6-aa18-b09596d31424",
+      "name": "Code in JavaScript"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call 'StockSense — WF-1 Demand Forecasting BATCHED'": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Call 'StockSense — WF-1 Demand Forecasting BATCHED'",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "bbbc0522-3522-4dd7-864a-1d5717526116",
+  "meta": {
+    "instanceId": "57d65a2bc812a61d6e5035e221165cd6b22c93ae42073164873dfc8f426d09d8"
+  },
+  "id": "4ytvtHfaX0DrKvpY",
+  "tags": []
+}

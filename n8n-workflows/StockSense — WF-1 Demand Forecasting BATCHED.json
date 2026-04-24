@@ -1,0 +1,476 @@
+{
+  "name": "StockSense — WF-1 Demand Forecasting BATCHED",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "f6cb3b39-8611-4260-a849-ef5d125e1b99",
+      "name": "Sub-workflow Trigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [
+        256,
+        -816
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1cHZt75v-q95s9JxVbUFbhoRlM9_MVv1vCtXSNahPO34",
+          "mode": "list",
+          "cachedResultName": "StockSense Data",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1cHZt75v-q95s9JxVbUFbhoRlM9_MVv1vCtXSNahPO34/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1816458849,
+          "mode": "list",
+          "cachedResultName": "stock_data",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1cHZt75v-q95s9JxVbUFbhoRlM9_MVv1vCtXSNahPO34/edit#gid=1816458849"
+        },
+        "options": {}
+      },
+      "id": "3be18da1-0c6d-41d8-8e89-83fe599c366d",
+      "name": "Read Google Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        544,
+        -816
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "yIqaeH3GFMMQPr5T",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const rows = $input.all();\nconst rawData = rows.map(r => r.json);\n\nconst grouped = {};\nfor (const row of rawData) {\n  const key = `${row['Product ID']}||${row['Region']}`;\n  if (!grouped[key]) {\n    grouped[key] = {\n      product_id: row['Product ID'],\n      category:   row['Category'],\n      region:     row['Region'],\n      store_id:   row['Store ID'],\n      data_points: []\n    };\n  }\n  grouped[key].data_points.push({\n    date:               row['Date'],\n    inventory_level:    parseFloat(row['Inventory Level'])    || 0,\n    units_sold:         parseFloat(row['Units Sold'])         || 0,\n    units_ordered:      parseFloat(row['Units Ordered'])      || 0,\n    price:              parseFloat(row['Price'])              || 0,\n    discount:           parseFloat(row['Discount'])           || 0,\n    weather_condition:  row['Weather Condition']              || '',\n    promotion:          parseInt(row['Promotion'])            || 0,\n    competitor_pricing: parseFloat(row['Competitor Pricing']) || 0,\n    seasonality:        row['Seasonality']                    || '',\n    epidemic:           parseInt(row['Epidemic'])             || 0,\n    demand:             parseFloat(row['Demand'])             || 0\n  });\n}\n\nconst avg = arr => arr.length ? arr.reduce((a,b)=>a+b,0)/arr.length : 0;\nconst max = arr => arr.length ? Math.max(...arr) : 0;\nconst min = arr => arr.length ? Math.min(...arr) : 0;\n\nconst enriched = Object.values(grouped).map(group => {\n  const pts = group.data_points;\n  const n   = pts.length;\n  const demands          = pts.map(p => p.demand);\n  const unitsSold        = pts.map(p => p.units_sold);\n  const prices           = pts.map(p => p.price);\n  const competitorPrices = pts.map(p => p.competitor_pricing);\n  const discounts        = pts.map(p => p.discount);\n  const inventories      = pts.map(p => p.inventory_level);\n\n  const third    = Math.max(1, Math.floor(n / 3));\n  const firstAvg = avg(demands.slice(0, third));\n  const lastAvg  = avg(demands.slice(-third));\n  const trend    = lastAvg > firstAvg * 1.05 ? 'increasing'\n                 : lastAvg < firstAvg * 0.95 ? 'decreasing' : 'stable';\n\n  const weatherCounts = {};\n  pts.forEach(p => { weatherCounts[p.weather_condition] = (weatherCounts[p.weather_condition]||0)+1; });\n  const seasonCounts = {};\n  pts.forEach(p => { seasonCounts[p.seasonality] = (seasonCounts[p.seasonality]||0)+1; });\n\n  const avg_price      = parseFloat(avg(prices).toFixed(2));\n  const avg_comp_price = parseFloat(avg(competitorPrices).toFixed(2));\n\n  return {\n    product_id:  group.product_id,\n    category:    group.category,\n    region:      group.region,\n    store_id:    group.store_id,\n    data_points_count: n,\n    date_range:  { from: pts[0]?.date, to: pts[n-1]?.date },\n    demand_stats: {\n      avg:   parseFloat(avg(demands).toFixed(2)),\n      max:   max(demands),\n      min:   min(demands),\n      total: demands.reduce((a,b)=>a+b,0),\n      trend\n    },\n    sales_stats: {\n      avg_units_sold:   parseFloat(avg(unitsSold).toFixed(2)),\n      avg_inventory:    parseFloat(avg(inventories).toFixed(2)),\n      avg_discount_pct: parseFloat(avg(discounts).toFixed(2)),\n      stockout_risk:    avg(inventories) < avg(unitsSold) * 1.2 ? 'high' : 'low'\n    },\n    pricing: {\n      avg_price,\n      avg_competitor_price: avg_comp_price,\n      price_vs_competitor: avg_comp_price\n        ? ((avg_price - avg_comp_price) / avg_comp_price * 100).toFixed(1) + '%'\n        : 'n/a'\n    },\n    contextual_signals: {\n      promotion_rate_pct:  parseFloat((pts.filter(p=>p.promotion===1).length/n*100).toFixed(1)),\n      epidemic_rate_pct:   parseFloat((pts.filter(p=>p.epidemic===1).length/n*100).toFixed(1)),\n      weather_breakdown:   weatherCounts,\n      season_breakdown:    seasonCounts\n    }\n  };\n});\n\n// Pass config forward alongside grouped data\nconst config = $node['Sub-workflow Trigger'].json;\nreturn [{ json: { ...config, total_groups: enriched.length, groups: enriched } }];\n"
+      },
+      "id": "561e2915-f5f7-428b-a035-0cb11ad45c9c",
+      "name": "Structure and Group Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        816,
+        -816
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "1cHZt75v-q95s9JxVbUFbhoRlM9_MVv1vCtXSNahPO34",
+          "mode": "list",
+          "cachedResultName": "StockSense Data",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1cHZt75v-q95s9JxVbUFbhoRlM9_MVv1vCtXSNahPO34/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 52095000,
+          "mode": "list",
+          "cachedResultName": "forecast_results",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1cHZt75v-q95s9JxVbUFbhoRlM9_MVv1vCtXSNahPO34/edit#gid=52095000"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "run_id": "={{ $execution.id }}",
+            "forecast_date": "={{ $today }}",
+            "product_id": "={{ $json.product_id }}",
+            "category": "={{ $json.category }}",
+            "region": "={{ $json.region }}",
+            "historical_avg_Demand": "={{ $json.historical_avg_Demand }}",
+            "historical_trend": "={{ $json.historical_trend }}",
+            "predicted_demand": "={{ $json.predicted_demand }}",
+            "confidence": "={{ $json.confidence }}",
+            "confidence_reason": "={{ $json.confidence_reason }}",
+            "key_drivers": "={{ $json.key_drivers }}",
+            "stockout_risk": "={{ $json.stockout_risk }}",
+            "recomended_action": "={{ $json.recomended_action }}",
+            "action_detail": "={{ $json.action_detail }}"
+          },
+          "matchingColumns": [
+            "run_id"
+          ],
+          "schema": [
+            {
+              "id": "run_id",
+              "displayName": "run_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "forecast_date",
+              "displayName": "forecast_date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "product_id",
+              "displayName": "product_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "category",
+              "displayName": "category",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "region",
+              "displayName": "region",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "historical_avg_Demand",
+              "displayName": "historical_avg_Demand",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "historical_trend",
+              "displayName": "historical_trend",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "predicted_demand",
+              "displayName": "predicted_demand",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "confidence",
+              "displayName": "confidence",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "confidence_reason",
+              "displayName": "confidence_reason",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "key_drivers",
+              "displayName": "key_drivers",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "stockout_risk",
+              "displayName": "stockout_risk",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "recomended_action",
+              "displayName": "recomended_action",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "action_detail",
+              "displayName": "action_detail",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "useAppend": true
+        }
+      },
+      "id": "558e7996-1226-4024-a719-196cdedb7f86",
+      "name": "Write Forecast to Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        256,
+        -256
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "yIqaeH3GFMMQPr5T",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.ilmu.ai/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer sk-9b06082696123c860945a19d8a79934999d3d8ff10b415fa"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: \"ilmu-glm-5.1\", messages: [ { role: \"system\", content: $json.systemMessage }, { role: \"user\", content: $json.userPrompt } ] }) }}",
+        "options": {
+          "timeout": 300000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        816,
+        -480
+      ],
+      "id": "02e192c2-03b2-4d4b-a006-3bb4de442abe",
+      "name": "HTTP Request",
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\n\n// Group the product groups by region\nconst byRegion = {};\nfor (const group of data.groups) {\n  const region = group.region;\n  if (!byRegion[region]) byRegion[region] = [];\n  byRegion[region].push(group);\n}\n\n// Return one item per region\nreturn Object.entries(byRegion).map(([region, groups]) => ({\n  json: {\n    region,\n    groups,\n    total_groups: groups.length\n  }\n}));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1104,
+        -816
+      ],
+      "id": "f099f241-0cfd-41f4-9bdd-fd36169c0518",
+      "name": "Split into Region Batches"
+    },
+    {
+      "parameters": {
+        "jsCode": "return $input.all().map(input => {\n  const data = input.json;\n\n  const systemMessage = `Demand forecasting analyst. Return raw JSON only, no markdown.\nSchema: {\"forecast_date\":\"<ISO>\",\"forecasts\":[{\"product_id\":\"\",\"category\":\"\",\"region\":\"\",\"historical_avg_demand\":0,\"historical_trend\":\"\",\"predicted_demand\":0,\"confidence\":\"\",\"confidence_reason\":\"\",\"key_drivers\":[],\"stockout_risk\":\"\",\"recommended_action\":\"\",\"action_detail\":\"\"}]}`;\n\n  const userPrompt = `Forecast ${data.region} region, ${data.total_groups} products. JSON only.\n${JSON.stringify(data.groups)}`;\n\n  return {\n    json: {\n      systemMessage,\n      userPrompt,\n      region:       data.region,\n      total_groups: data.total_groups\n    }\n  };\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        544,
+        -480
+      ],
+      "id": "b8eb3594-ff8c-4f65-93e2-20f3b498080e",
+      "name": "Build LLM Prompt"
+    },
+    {
+      "parameters": {
+        "jsCode": "return $input.all().flatMap(input => {\n  const data = input.json;\n\n  const slimGroups = data.groups.map(g => ({\n    pid:    g.product_id,\n    cat:    g.category,\n    reg:    g.region,\n    n:      g.data_points_count,\n    d_avg:  g.demand_stats.avg,\n    d_max:  g.demand_stats.max,\n    d_min:  g.demand_stats.min,\n    trend:  g.demand_stats.trend,\n    inv:    g.sales_stats.avg_inventory,\n    sold:   g.sales_stats.avg_units_sold,\n    risk:   g.sales_stats.stockout_risk,\n    disc:   g.sales_stats.avg_discount_pct,\n    pvc:    g.pricing.price_vs_competitor,\n    promo:  g.contextual_signals.promotion_rate_pct,\n    season: Object.keys(g.contextual_signals.season_breakdown)[0] || ''\n  }));\n\n  // Split into chunks of 10\n  const chunkSize = 5;\n  const chunks = [];\n  for (let i = 0; i < slimGroups.length; i += chunkSize) {\n    chunks.push(slimGroups.slice(i, i + chunkSize));\n  }\n\n  return chunks.map((chunk, idx) => ({\n    json: {\n      region:       data.region,\n      total_groups: chunk.length,\n      groups:       chunk,\n      batch_label:  `${data.region}-${idx + 1}`\n    }\n  }));\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        256,
+        -480
+      ],
+      "id": "dcd2f884-8796-4d58-b154-b99f421d7f7b",
+      "name": "Slim data"
+    },
+    {
+      "parameters": {
+        "jsCode": "return $input.all().flatMap(input => {\n  const response = input.json;\n  \n  // Ilmu.ai OpenAI-compatible format\n  let rawText = response.choices?.[0]?.message?.content || '';\n  \n  if (!rawText) {\n    throw new Error('No text in response. Keys: ' + Object.keys(response).join(', '));\n  }\n  \n  // Strip markdown fences just in case\n  rawText = rawText\n    .replace(/^```json\\s*/i, '')\n    .replace(/^```\\s*/i, '')\n    .replace(/\\s*```$/i, '')\n    .trim();\n  \n  let parsed;\n  try {\n    parsed = JSON.parse(rawText);\n  } catch(e) {\n    throw new Error('Parse failed: ' + e.message + '\\nRaw: ' + rawText.substring(0, 300));\n  }\n  \n  if (!parsed.forecasts?.length) return [];\n  \n  return parsed.forecasts.map(f => ({\n    json: {\n      run_id:                $('Sub-workflow Trigger').first().json.runId || $execution.id,\n      forecast_date:         parsed.forecast_date || new Date().toISOString().split('T')[0],\n      product_id:            f.product_id,\n      category:              f.category,\n      region:                f.region,\n      historical_avg_Demand: f.historical_avg_demand,\n      historical_trend:      f.historical_trend,\n      predicted_demand:      f.predicted_demand,\n      confidence:            f.confidence,\n      confidence_reason:     f.confidence_reason,\n      key_drivers:           Array.isArray(f.key_drivers) ? f.key_drivers.join(', ') : f.key_drivers || '',\n      stockout_risk:         f.stockout_risk,\n      recomended_action:     f.recommended_action,\n      action_detail:         f.action_detail\n    }\n  }));\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1104,
+        -480
+      ],
+      "id": "b1cd7597-f5ac-444f-8aee-b49fb2fb3ecc",
+      "name": "Parse for Sheets"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Read forecast data from the validation node\nconst forecasts = $('Parse for Sheets').all().map(i => i.json);\nconst runId = $execution.id || '';\n\n// Build region breakdown\nconst byRegion = {};\nconst stockoutRisk = [];\nfor (const f of forecasts) {\n  byRegion[f.region] = (byRegion[f.region] || 0) + 1;\n  if (f.stockout_risk === 'high') stockoutRisk.push(`${f.product_id} (${f.region})`);\n}\n\nreturn [{ json: {\n  wf1_status:          'success',\n  run_id:              runId,\n  completed_at:        new Date().toISOString(),\n  forecasts_generated: forecasts.length,\n  regions_covered:     Object.keys(byRegion),\n  breakdown:           byRegion,\n  stockout_risks:      stockoutRisk.length,\n  written_to_sheet:    true,\n  summary_message:     `WF-1 complete: generated ${forecasts.length} forecasts across ${Object.keys(byRegion).length} regions, flagged ${stockoutRisk.length} stockout risks.`\n}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        544,
+        -256
+      ],
+      "id": "2db326c7-c760-434a-910d-6d7496769a29",
+      "name": "Code in JavaScript"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Sub-workflow Trigger": {
+      "main": [
+        [
+          {
+            "node": "Read Google Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Google Sheet": {
+      "main": [
+        [
+          {
+            "node": "Structure and Group Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structure and Group Data": {
+      "main": [
+        [
+          {
+            "node": "Split into Region Batches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Parse for Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split into Region Batches": {
+      "main": [
+        [
+          {
+            "node": "Slim data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build LLM Prompt": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Slim data": {
+      "main": [
+        [
+          {
+            "node": "Build LLM Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse for Sheets": {
+      "main": [
+        [
+          {
+            "node": "Write Forecast to Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write Forecast to Sheet": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "0429f930-9430-413f-8b05-b552a40fbbb3",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "57d65a2bc812a61d6e5035e221165cd6b22c93ae42073164873dfc8f426d09d8"
+  },
+  "id": "Sz5G9tyAJZ4bMX11",
+  "tags": []
+}

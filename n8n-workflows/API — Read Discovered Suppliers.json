@@ -1,0 +1,107 @@
+{
+  "name": "API — Read Discovered Suppliers",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "stocksense/discovered-suppliers",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "2e5ab93a-155f-44ce-8baf-509d31fc489c",
+      "name": "Webhook",
+      "webhookId": "187a8ebf-41ce-4485-955a-2c77c4ff7536"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1cHZt75v-q95s9JxVbUFbhoRlM9_MVv1vCtXSNahPO34",
+          "mode": "list",
+          "cachedResultName": "StockSense Data",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1cHZt75v-q95s9JxVbUFbhoRlM9_MVv1vCtXSNahPO34/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1868593313,
+          "mode": "list",
+          "cachedResultName": "supplier_discovery_log",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1cHZt75v-q95s9JxVbUFbhoRlM9_MVv1vCtXSNahPO34/edit#gid=1868593313"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        208,
+        0
+      ],
+      "id": "fab835fd-8853-4df0-b422-d05c0ff92001",
+      "name": "Get row(s) in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "yIqaeH3GFMMQPr5T",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $input.all().map(i => i.json) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        416,
+        0
+      ],
+      "id": "d26d2a3a-fc27-4540-920a-b6e34460bfac",
+      "name": "Respond to Webhook"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Get row(s) in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get row(s) in sheet": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "f8d1d2a2-afc0-4a18-a264-3cd5734a875e",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "57d65a2bc812a61d6e5035e221165cd6b22c93ae42073164873dfc8f426d09d8"
+  },
+  "id": "DOKkqOjEtDIgLpjl",
+  "tags": []
+}
