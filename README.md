@@ -8,6 +8,9 @@
         ![LLM](https://img.shields.io/badge/LLM-ILMU_GLM--5.1-7ba86b)
 
 ![StockSense Dashboard](docs/screenshots/dashboard.png)
+## Demo
+
+[Video Demo Link](https://www.youtube.com/watch?v=lWxYRCOtRWU)
 
 ## What this is
 
@@ -63,9 +66,6 @@ Is it weird? Yes. Does it work? Also yes.
                                                           └──────────────────┘
 ```
 
-## Demo
-
-[Video Demo Link](https://www.youtube.com/watch?v=lWxYRCOtRWU)
 
 ### Key flows
 
