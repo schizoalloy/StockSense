@@ -65,7 +65,7 @@ Is it weird? Yes. Does it work? Also yes.
 
 ## Demo
 
-[Live demo link — if deployed]
+![StockSense Dashboard](https://www.youtube.com/watch?v=lWxYRCOtRWU)
 
 ### Key flows
 
